@@ -50,8 +50,12 @@ class HUD():
 		self.message_display("Player 2", (self.width-100,30))
 		self.shortTime = float((int(self.game.time*10))/10)
 		self.message_display(str(self.shortTime),(self.width/2,self.height/2),large=True)
-		self.message_display(str(self.game.score1),(int(self.width*0.3),self.height/2),large=True)
-		self.message_display(str(self.game.score2), (int(self.width * 0.7), self.height / 2), large=True)
+		self.message_display(str(self.game.score1),(int(self.width*0.35),self.height/2),large=True)
+		self.message_display(str(self.game.score2), (int(self.width * 0.65), self.height / 2), large=True)
+		self.message_display("HP: "+str(self.game.player1.hp), (int(self.width * 0.06), self.height *0.7))
+		self.message_display("HP: " + str(self.game.player2.hp), (int(self.width * 0.94), self.height * 0.7))
+		self.message_display("Ammo: " + str(self.game.player1.ammo), (int(self.width * 0.2), self.height * 0.7))
+		self.message_display("Ammo: " + str(self.game.player2.ammo), (int(self.width * 0.8), self.height * 0.7))
 
 class player():
 	def __init__(self,id,game):
@@ -92,7 +96,6 @@ class player():
 
 	def draw(self):
 		self.rotation = pygame.transform.rotate(self.image,-(math.degrees(math.atan2((self.mouseY-self.ypos),(self.mouseX-self.xpos))))-90)
-		print ((int(self.xpos - self.width / 2),int(self.ypos - self.height / 2)))
 		self.game.screen.blit(self.rotation,(int(self.xpos - self.width / 2),int(self.ypos - self.height / 2)))
 		pygame.draw.circle(self.game.screen,BLUE,(self.xpos,self.ypos),2)
 
@@ -128,6 +131,8 @@ class TopDownGame():
 		self.player2 = player(2,self)
 		self.drawObjects.append(self.player1)
 		self.drawObjects.append(self.player2)
+	def new_round(self):
+		pass
 
 	def update(self):
 		self.clock.tick(60)
@@ -144,32 +149,31 @@ class TopDownGame():
 				self.connection.sendall(str.encode("Closing"))
 				self.connection.close()
 				exit()
-			if event.type == pygame.KEYDOWN:
-				pass
-		if pygame.key.get_pressed()[pygame.K_a]:
+		self.pressedKeys = pygame.key.get_pressed()
+		if self.pressedKeys[pygame.K_a]:
 			self.aPressed = 1
 		else:
 			self.aPressed = 0
-		if pygame.key.get_pressed()[pygame.K_w]:
+		if self.pressedKeys[pygame.K_w]:
 			self.wPressed = 1
 		else:
 			self.wPressed = 0
-		if pygame.key.get_pressed()[pygame.K_s]:
+		if self.pressedKeys[pygame.K_s]:
 			self.sPressed = 1
 		else:
 			self.sPressed = 0
-		if pygame.key.get_pressed()[pygame.K_d]:
+		if self.pressedKeys[pygame.K_d]:
 			self.dPressed = 1
 		else:
 			self.dPressed = 0
-		if pygame.key.get_pressed()[pygame.K_SPACE]:
+		if self.pressedKeys[pygame.K_SPACE]:
 			self.ShootPressed = 1
 		else:
 			self.ShootPressed = 0
-		"""if pygame.key.get_pressed()[pygame.K_LSHIFT]:
+		if self.pressedKeys[pygame.K_LSHIFT]:
 			self.PowerPressed = 1
 		else:
-			self.PowerPressed = 0"""
+			self.PowerPressed = 0
 		#DRAW HERE
 
 		#HERE WE SEND INPUTS TO SERVER
@@ -213,25 +217,25 @@ class TopDownGame():
 		self.player1.mouseY = self.player1_mouse[1]
 		self.player2.mouseX = self.player2_mouse[0]
 		self.player2.mouseY = self.player2_mouse[1]
-		"""self.bullets = []
-		print (self.bulletdata)
+		self.bullets = []
 		# Here we look at the bullets
 		if self.bulletdata != "":
 			self.bulletsdata = self.bulletdata.split(":")
 			for bullet in self.bulletsdata:
 				self.bulletinfo = bullet.split(",")
 				self.bullets.append([int(self.bulletinfo[0]),int(self.bulletinfo[1]),float(self.bulletinfo[2]),float(self.bulletinfo[3]),str(self.bulletinfo[4])])
-		"""
+
 		for k in self.gameObjects:
 			k.update()
 		#HERE WE DRAW
 		self.screen.fill(WHITE)
+		pygame.draw.circle(self.screen,RED,(self.goal1[0],self.goal1[1]),15)
+		pygame.draw.circle(self.screen,BLUE, (self.goal2[0], self.goal2[1]),15)
 		for k in self.drawObjects:
 			k.draw()
-		"""for bullet in self.bullets:
+		for bullet in self.bullets:
 			pygame.draw.circle(self.screen,BLACK,(bullet[0],bullet[1]),4)
-			"""
-		print("drawing")
+
 		pygame.display.flip()
 
 
@@ -249,12 +253,10 @@ while data != "1" and data != "2":
 	data = data.decode("utf-8")
 	time.sleep(1)
 	print ("waiting for players... ")
-print (data)
 
 TheGame = TopDownGame(s)
 while True:
 	TheGame.update()
-s.close()
 
 s.sendall(str.encode("error"))
 s.close()
