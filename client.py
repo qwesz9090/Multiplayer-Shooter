@@ -56,7 +56,13 @@ class HUD():
 		self.message_display("HP: " + str(self.game.player2.hp), (int(self.width * 0.94), self.height * 0.7))
 		self.message_display("Ammo: " + str(self.game.player1.ammo), (int(self.width * 0.2), self.height * 0.7))
 		self.message_display("Ammo: " + str(self.game.player2.ammo), (int(self.width * 0.8), self.height * 0.7))
-
+class Wall():
+	def __init__(self,rect,game):
+		self.rect = rect
+		self.game = game
+		self.game.drawObjects.append(self)
+	def draw(self):
+		pygame.draw.rect(self.game.screen,BLACK,self.rect)
 class player():
 	def __init__(self,id,game):
 		self.game = game
@@ -100,7 +106,7 @@ class player():
 		pygame.draw.circle(self.game.screen,BLUE,(self.xpos,self.ypos),2)
 
 class TopDownGame():
-	def __init__(self,connection):
+	def __init__(self,connection,walls):
 		pygame.init()
 		self.connection = connection
 		self.width, self.height = 1300,700
@@ -125,6 +131,9 @@ class TopDownGame():
 		self.goal1 = [0,0]
 		self.goal2 = [0,0]
 		self.bullets = []
+		for i in walls:
+			Wall(i,self)
+
 
 	def setup(self):
 		self.player1 = player(1,self)
@@ -248,13 +257,17 @@ print ("Waiting for a connection with server")
 data = s.recv(2048)
 print ("Connection Established")
 print ("Server: " + data.decode("utf-8") + "\n")
-while data != "1" and data != "2":
+while data[0] != "1" and data[0] != "2":
 	data = s.recv(2048)
 	data = data.decode("utf-8")
 	time.sleep(1)
 	print ("waiting for players... ")
-
-TheGame = TopDownGame(s)
+walls = data[1:].split(":")
+walllist = list()
+for i in walls:
+	temp = i.split(",")
+	walllist.append((int(temp[0]),int(temp[1]),int(temp[2]),int(temp[3])))
+TheGame = TopDownGame(s,walllist)
 while True:
 	TheGame.update()
 

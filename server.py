@@ -4,6 +4,7 @@ import sys
 import pygame
 import time
 import math
+import random
 host = ""
 port = 5555
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -16,13 +17,42 @@ except socket.error as e:
 s.listen(5)
 print ("Waiting for a connection:")
 PLAYERS = 0
-def threaded_client(conn,serv):
+def generate_walls():
+	minWalls = 10
+	maxWalls = 15
+	maxSize = 300
+	mediumSize = 100
+	minSize = 50
+	gameboardSizeX = (0,1300)
+	gameboardSizeY = (100,700)
+	out = []
+	for i in range(random.randint(minWalls,maxWalls)):
+		if random.randint(0,1) == 1:
+			out.append((random.randint(gameboardSizeX[0],gameboardSizeX[1]),random.randint(gameboardSizeY[0],gameboardSizeY[1]),
+					random.randint(mediumSize,maxSize),random.randint(minSize,mediumSize)))
+		else:
+			out.append((random.randint(gameboardSizeX[0], gameboardSizeX[1]),
+						random.randint(gameboardSizeY[0], gameboardSizeY[1]),
+						random.randint(minSize,mediumSize), random.randint(mediumSize,maxSize)))
+	return out
+
+def threaded_client(conn,serv,wallinfo):
 	Controlled_player = PLAYERS
+	walldata = ""
+	for i in wallinfo:
+		wall = ""
+		for k in i:
+			wall += str(k)
+			wall += ","
+		wall = wall[:-1]
+		walldata += wall
+		walldata += ":"
+	walldata = walldata[:-1]
 	conn.send(str.encode("HEY! You Are Player " + str(PLAYERS) + "\n"))
 	while PLAYERS != 2:
 		time.sleep(1)
 	print ("Two players, starting game.")
-	conn.sendall(str.encode(str(Controlled_player)))
+	conn.sendall(str.encode(str(Controlled_player)+walldata))
 	while True:
 		data = conn.recv(2048)
 		if Controlled_player == 1:
@@ -47,17 +77,19 @@ class Goal():
 		self.owner = str(owner)
 		self.game = game
 	def taken(self):
-		if self.owner == "1" and math.hypot(self.pos[0]-self.game.player2pos[0],self.pos[1]-self.game.player2pos[1]) < 5:
+		if self.owner == "1" and math.hypot(self.pos[0]-self.game.player2pos[0],self.pos[1]-self.game.player2pos[1]) < 10:
 			self.game.player2info[2] += 1
 			return True
-		if self.owner == "2" and math.hypot(self.pos[0]-self.game.player1pos[0],self.pos[1]-self.game.player1pos[1]) < 5:
+		if self.owner == "2" and math.hypot(self.pos[0]-self.game.player1pos[0],self.pos[1]-self.game.player1pos[1]) < 10:
 			self.game.player1info[2] += 1
 			return True
 		else:
 			return False
 	def move(self,x,y):
 		self.pos = [x,y]
-
+class Wall():
+	def __init__(self,rect):
+		self.rect = rect
 class Bullet():
 	def __init__(self,game,pos,vector,owner):
 		self.pos = [int(pos[0]),int(pos[1])]
@@ -93,7 +125,7 @@ class Bullet():
 
 
 class TopDownGame():
-	def __init__(self):
+	def __init__(self,walls):
 		self.player1commsOut = ""
 		self.player2commsIn = ""
 		self.player1commsIn = ""
@@ -127,6 +159,17 @@ class TopDownGame():
 		self.speed2 = 3
 		self.lastFrame = 0
 		self.lastreload = 0
+		self.walllist = walls
+		self.wallcords = [[False for i in range(self.screenheight + 500)] for l in range(self.screenwidth + 500)]
+		for i in self.walllist:
+			for o in range(i[2]):
+				for p in range(i[3]):
+					self.wallcords[i[0] + o][i[1] + p] = True
+
+	def illegal_place(self,cords):
+		return self.wallcords[cords[0]][cords[1]]
+
+
 	def send_to_clients(self):
 		self.Pump = True
 	def intT(self,x):
@@ -149,7 +192,9 @@ class TopDownGame():
 		#Data StructureIN: Mpos:0,0;w:0;a:0;s:0;d:0;p:0;s:0
 		self.data1 = server.player1commsIn.split(";")
 		self.data2 = server.player2commsIn.split(";")
-
+		self.memory1pos = list(self.player1pos)
+		self.memory1pos = list(self.player1pos)
+		self.memory2pos = list(self.player2pos)
 		if server.player1commsIn != "" and server.player2commsIn != "":
 			self.player1mousepos = [int(self.data1[0][6:].split(",")[0]),int(self.data1[0][6:].split(",")[1][:-1])]
 			self.player2mousepos = [int(self.data2[0][6:].split(",")[0]), int(self.data2[0][6:].split(",")[1][:-1])]
@@ -216,16 +261,14 @@ class TopDownGame():
 		self.goal2 = self.goalFor2.pos
 		self.check_win()
 		#move the players
-		self.memorypos = list(self.player1pos)
+
 		self.player1pos[0] += self.player1speed[0]
 		self.player1pos[1] += self.player1speed[1]
-		if math.hypot(self.player1pos[0]-self.player2pos[0],self.player1pos[1]-self.player2pos[1]) < 40:
-			self.player1pos = list(self.memorypos)
-		self.memorypos = list(self.player2pos)
+
+
 		self.player2pos[0] += self.player2speed[0]
 		self.player2pos[1] += self.player2speed[1]
-		if math.hypot(self.player1pos[0]-self.player2pos[0],self.player1pos[1]-self.player2pos[1]) < 40:
-			self.player2pos = list(self.memorypos)
+
 		#stop the player from going out of the screen
 		if self.player1pos[0] < 0:
 			self.player1pos[0] = 0
@@ -266,6 +309,8 @@ class TopDownGame():
 		self.bulletinfo = ""
 		for k in self.bulletlist:
 			#check for collisions and destroy them on impact
+			if self.illegal_place([int(k.pos[0]),int(k.pos[1])]):
+				k.destroyed = True
 			if k.collision():
 				k.destroyed = True
 				if k.owner == "1":
@@ -283,6 +328,14 @@ class TopDownGame():
 				#add the info on the bullets so we can send it to clients
 				self.bulletinfo += k.showInfo()
 				self.bulletinfo += ":"
+		if math.hypot(self.player1pos[0]-self.player2pos[0],self.player1pos[1]-self.player2pos[1]) < 40:
+			self.player1pos = list(self.memory1pos)
+		if math.hypot(self.player1pos[0]-self.player2pos[0],self.player1pos[1]-self.player2pos[1]) < 40:
+			self.player2pos = list(self.memory2pos)
+		if self.illegal_place(self.player1pos):
+			self.player1pos = list(self.memory1pos)
+		if self.illegal_place(self.player2pos):
+			self.player2pos = list(self.memory2pos)
 		if self.bulletinfo != "":
 			self.bulletinfo = self.bulletinfo[:-1]
 
@@ -311,10 +364,15 @@ class TopDownGame():
 		self.goal2 = list(self.goalFor2.pos)
 		self.player1respawn = list(self.goal1)
 		self.player2respawn = list(self.goal2)
-
+	def placePlayers(self):
+		while self.illegal_place(self.player1pos):
+			self.player1pos = [random.randint(1,self.screenwidth),random.randint(1,self.screenheight)]
+		while self.illegal_place(self.player2pos):
+			self.player2pos = [random.randint(1,self.screenwidth),random.randint(1,self.screenheight)]
 	def start(self):
 		self.playing = True
 		self.round = True
+		self.placePlayers()
 		while self.playing:
 			self.new_round()
 			while self.round:
@@ -324,15 +382,15 @@ class TopDownGame():
 
 
 
+wallmap = generate_walls()
 
-
-server = TopDownGame()
+server = TopDownGame(wallmap)
 while PLAYERS != 2:
 	conn,addr = s.accept()
 	print("Connected to: " +addr[0]+":"+str(addr[1]))
 
 	PLAYERS += 1
 
-	start_new_thread(threaded_client,(conn,server))
+	start_new_thread(threaded_client,(conn,server,wallmap))
 	if PLAYERS == 2:
 		server.start()
